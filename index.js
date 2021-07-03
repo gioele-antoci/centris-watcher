@@ -127,8 +127,7 @@ const lastAddress$ = new BehaviorSubject("").pipe(
     share());
 
 lastAddress$.pipe(
-    switchMap(() => interval(1000)),
-    take(6),
+    switchMap(() => interval(1000).pipe(take(6))),
     catchError(err => console.log("IOT command failed", err))
 ).subscribe(() => {
     axios.get(iotCommand);
