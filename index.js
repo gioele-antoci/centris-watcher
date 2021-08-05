@@ -2,7 +2,7 @@ import axios from "axios";
 import htmlParser from "node-html-parser";
 import { BehaviorSubject, forkJoin, from, interval, timer } from "rxjs";
 import playsound from "play-sound"
-import { catchError, take, switchMap, withLatestFrom, distinctUntilChanged, filter, share, tap } from "rxjs/operators";
+import { catchError, take, switchMap, distinctUntilChanged, filter, share } from "rxjs/operators";
 
 import yargs from 'yargs';
 import { hideBin } from "yargs/helpers";
@@ -112,11 +112,11 @@ const orangeLineAddresses = [
 ];
 
 const getAddressUrl = (address1, address2) => `https://www.mapquestapi.com/directions/v2/route?key=${mapKey}&from=${encodeURIComponent(address1)}&to=${encodeURIComponent(address2)}&routeType=pedestrian&unit=k`;
-const requestDistance$ = (addressHouse, address2) => from(axios.get(getAddressUrl(addressHouse, address2))).pipe(tap(() => console.log(`Requesting distance for station at ${address2}`)));
+const requestDistance$ = (addressHouse, address2) => from(axios.get(getAddressUrl(addressHouse, address2))).pipe(share());
 const allStationsRequests$ = (addressHouse) => [...blueLineAddresses, ...greenLineAddresses, ...orangeLineAddresses].map(addressMetro => requestDistance$(addressHouse, addressMetro));
 const canMakeRequest = () => {
     const date = new Date();
-    return date.getHours() > 7 && date.getHours() < 23;
+    return date.getHours() > 7 && date.getHours() <= 23;
 };
 
 let lastQueryDate = null;
@@ -140,7 +140,11 @@ lastAddress$.pipe(
         return forkJoin(allStationsRequests$(address));
     })
 ).subscribe((requests) => {
-    const minDist = Math.min(...requests.map(request => +request.data.route.distance).filter(d => d >= 0));
+    const minDist = Math.min(...requests?.map(request => +request?.data?.route?.distance).filter(d => d >= 0));
+    if (!minDist) {
+        console.log("Couldn't calculate distance");
+        return;
+    }
     console.log(`Minimum distance from a metro station: ${minDist} km`)
     if (minDist > 1.5) {
         // do not play audio if it's too far from metro (farther than 1.5km)
@@ -153,7 +157,6 @@ lastAddress$.pipe(
             throw err;
         }
     });
-
 });
 
 timer(0, 60000).pipe(
@@ -161,7 +164,6 @@ timer(0, 60000).pipe(
     filter(() => canMakeRequest()),
     switchMap(() => from(axios.get(centrisUrl)))
 ).subscribe((res) => {
-
     lastQueryDate = res?.headers?.date ? new Date(res.headers.date).toString() : 'no response date';
 
     const root = htmlParser.parse(res.data);
