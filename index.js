@@ -2,10 +2,14 @@ import axios from "axios";
 import htmlParser from "node-html-parser";
 import { BehaviorSubject, forkJoin, from, interval, timer } from "rxjs";
 import playsound from "play-sound"
-import { catchError, take, switchMap, distinctUntilChanged, filter, share } from "rxjs/operators";
+import { catchError, take, switchMap, distinctUntilChanged, filter, share, skip} from "rxjs/operators";
 
 import yargs from 'yargs';
 import { hideBin } from "yargs/helpers";
+import * as path from "path";
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const args = yargs(hideBin(process.argv)).argv;
 console.log("arguments", args);
@@ -18,19 +22,12 @@ const centrisUrl = args.centris;
 const iotCommand = args.IOTCommand;
 const mapKey = args.mapKey;
 
-const playSoundPlayers = [
-    'mplayer',
-    'afplay',
-    'mpg123',
-    'mpg321',
-    'play',
-    'omxplayer',
-    'aplay',
-    'cmdmp3'
-];
-const players = playSoundPlayers.concat(playSoundPlayers.map(x => `${x}.exe`));
-
 const playSoundInstance = playsound();
+playSoundInstance.play(path.resolve(__dirname, "assets/new-house.mp3"), (err) => {
+    if (err) {
+        console.log(err);
+    }
+});
 
 // process.exit(1)
 
@@ -127,13 +124,14 @@ const lastAddress$ = new BehaviorSubject("").pipe(
     share());
 
 lastAddress$.pipe(
-    switchMap(() => interval(1000).pipe(take(6))),
+    switchMap(() => interval(1500).pipe(take(6))),
     catchError(err => console.log("IOT command failed", err))
 ).subscribe(() => {
     axios.get(iotCommand);
 });
 
 lastAddress$.pipe(
+    filter(x=>!!x),    
     catchError(err => console.log(`An error while retrieving addresses happened: ${err}`)),
     switchMap(address => {
         console.log("Checking addresses...");
@@ -154,7 +152,7 @@ lastAddress$.pipe(
 
     playSoundInstance.play("./assets/new-house.mp3", (err) => {
         if (err) {
-            throw err;
+            console.log("Error playing audio", err);
         }
     });
 });
@@ -177,7 +175,6 @@ timer(0, 60000).pipe(
 
     const firstAddress = allAddresses[0];
     console.log(`Check done at ${lastQueryDate}, latest known house: ${firstAddress}`);
-
     lastAddress$.next(firstAddress);
 
     console.log("------------------------------------------");
