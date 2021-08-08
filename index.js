@@ -2,7 +2,7 @@ import axios from "axios";
 import htmlParser from "node-html-parser";
 import { BehaviorSubject, forkJoin, from, interval, timer } from "rxjs";
 import playsound from "play-sound"
-import { catchError, take, switchMap, distinctUntilChanged, filter, share, skip} from "rxjs/operators";
+import { catchError, take, switchMap, distinctUntilChanged, filter, share, skip } from "rxjs/operators";
 
 import yargs from 'yargs';
 import { hideBin } from "yargs/helpers";
@@ -23,11 +23,6 @@ const iotCommand = args.IOTCommand;
 const mapKey = args.mapKey;
 
 const playSoundInstance = playsound();
-playSoundInstance.play(path.resolve(__dirname, "assets/new-house.mp3"), (err) => {
-    if (err) {
-        console.log(err);
-    }
-});
 
 // process.exit(1)
 
@@ -131,7 +126,7 @@ lastAddress$.pipe(
 });
 
 lastAddress$.pipe(
-    filter(x=>!!x),    
+    filter(x => !!x),
     catchError(err => console.log(`An error while retrieving addresses happened: ${err}`)),
     switchMap(address => {
         console.log("Checking addresses...");
