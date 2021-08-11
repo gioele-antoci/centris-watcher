@@ -2,7 +2,7 @@ import axios from "axios";
 import htmlParser from "node-html-parser";
 import { BehaviorSubject, forkJoin, from, interval, timer } from "rxjs";
 import playsound from "play-sound"
-import { catchError, take, switchMap, distinctUntilChanged, filter, share, skip } from "rxjs/operators";
+import { catchError, take, switchMap, distinctUntilChanged, filter, share, skip, withLatestFrom } from "rxjs/operators";
 
 import yargs from 'yargs';
 import { hideBin } from "yargs/helpers";
@@ -113,26 +113,27 @@ const canMakeRequest = () => {
 
 let lastQueryDate = null;
 
-const lastAddress$ = new BehaviorSubject("").pipe(
+const lastHouse$ = new BehaviorSubject("").pipe(
     filter(x => !!x),
     distinctUntilChanged((a, b) => a === b),
     share());
 
-lastAddress$.pipe(
+lastHouse$.pipe(
     switchMap(() => interval(1500).pipe(take(6))),
     catchError(err => console.log("IOT command failed", err))
 ).subscribe(() => {
     axios.get(iotCommand);
 });
 
-lastAddress$.pipe(
+lastHouse$.pipe(
     filter(x => !!x),
     catchError(err => console.log(`An error while retrieving addresses happened: ${err}`)),
-    switchMap(address => {
+    switchMap(lastHouse => {
         console.log("Checking addresses...");
-        return forkJoin(allStationsRequests$(address));
-    })
-).subscribe((requests) => {
+        return forkJoin(allStationsRequests$(lastHouse.address));
+    }),
+    withLatestFrom(lastHouse$)
+).subscribe(([requests, lastHouse]) => {
     const minDist = Math.min(...requests?.map(request => +request?.data?.route?.distance).filter(d => d >= 0));
     if (!minDist) {
         console.log("Couldn't calculate distance");
@@ -145,7 +146,7 @@ lastAddress$.pipe(
     }
     console.log("NEW HOUSE near metro FOUND!")
 
-    playSoundInstance.play("./assets/new-house.mp3", (err) => {
+    playSoundInstance.play(`./assets/${lastHouse.isJustNewPrice ? "just_a_price" : "new_house"}.mp3`, (err) => {
         if (err) {
             console.log("Error playing audio", err);
         }
@@ -160,17 +161,22 @@ timer(0, 60000).pipe(
     lastQueryDate = res?.headers?.date ? new Date(res.headers.date).toString() : 'no response date';
 
     const root = htmlParser.parse(res.data);
-    const allAddresses = Array.from(root.querySelectorAll(".formula.J_formula a")).reduce((acc, x) => {
-        if (x.textContent) {
-            // TODO check if it's a price change 
-            acc.push(x.textContent);
+    // const nodes = root.querySelectorAll(".formula.J_formula a");
+    const nodes = root.querySelectorAll(".multiLineDisplay");
+    const allAddresses = Array.from(nodes).reduce((acc, node) => {
+        // find the first anchor tag child of that class that has text content (which represents address)
+        const address = node.querySelectorAll(".formula.J_formula a")?.find(n => !!n.textContent)?.textContent;
+        if (address) {
+            const newPriceLabel = node.querySelector(".mtx-subheader-badge")?.textContent;
+            const isJustNewPrice = newPriceLabel === "New Price" || newPriceLabel === "Nouveau prix";
+            acc.push({ address, isJustNewPrice });
         }
         return acc;
     }, []);
 
     const firstAddress = allAddresses[0];
-    console.log(`Check done at ${lastQueryDate}, latest known house: ${firstAddress}`);
-    lastAddress$.next(firstAddress);
+    console.log(`Check done at ${lastQueryDate}, latest known house: ${firstAddress.address}`);
+    lastHouse$.next(firstAddress);
 
     console.log("------------------------------------------");
 });
