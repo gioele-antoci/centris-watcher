@@ -6,7 +6,6 @@ import { catchError, take, switchMap, distinctUntilChanged, filter, share, skip,
 
 import yargs from 'yargs';
 import { hideBin } from "yargs/helpers";
-import * as path from "path";
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -115,7 +114,7 @@ let lastQueryDate = null;
 
 const lastHouse$ = new BehaviorSubject("").pipe(
     filter(x => !!x),
-    distinctUntilChanged((a, b) => a === b),
+    distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)),
     share());
 
 lastHouse$.pipe(
