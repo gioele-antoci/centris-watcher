@@ -1,8 +1,8 @@
 import axios from "axios";
 import htmlParser from "node-html-parser";
-import { BehaviorSubject, forkJoin, from, interval, timer } from "rxjs";
+import { BehaviorSubject, forkJoin, from, interval, of, timer } from "rxjs";
 import playsound from "play-sound"
-import { catchError, take, switchMap, distinctUntilChanged, filter, share, skip, withLatestFrom } from "rxjs/operators";
+import { catchError, take, switchMap, distinctUntilChanged, filter, share, withLatestFrom } from "rxjs/operators";
 
 import yargs from 'yargs';
 import { hideBin } from "yargs/helpers";
@@ -103,7 +103,9 @@ const orangeLineAddresses = [
 ];
 
 const getAddressUrl = (address1, address2) => `https://www.mapquestapi.com/directions/v2/route?key=${mapKey}&from=${encodeURIComponent(address1)}&to=${encodeURIComponent(address2)}&routeType=pedestrian&unit=k`;
-const requestDistance$ = (addressHouse, address2) => from(axios.get(getAddressUrl(addressHouse, address2))).pipe(share());
+const requestDistance$ = (addressHouse, address2) => from(axios.get(getAddressUrl(addressHouse, address2))).pipe(
+    catchError(() => of(null)),
+    share());
 const allStationsRequests$ = (addressHouse) => [...blueLineAddresses, ...greenLineAddresses, ...orangeLineAddresses].map(addressMetro => requestDistance$(addressHouse, addressMetro));
 const canMakeRequest = () => {
     const date = new Date();
@@ -134,7 +136,7 @@ lastHouse$.pipe(
     withLatestFrom(lastHouse$)
 ).subscribe(([requests, lastHouse]) => {
     const minDist = Math.min(...requests?.map(request => +request?.data?.route?.distance).filter(d => d >= 0));
-    if (!minDist) {
+    if (!isFinite(minDist)) {
         console.log("Couldn't calculate distance");
         return;
     }
